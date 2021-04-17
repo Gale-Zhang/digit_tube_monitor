@@ -1,7 +1,13 @@
+import datetime
+import json
+import socket
 import sys
+from urllib import request, parse
+
 import cv2 as cv
 import copy
-from PyQt5.QtWidgets import QApplication, QWidget, QLabel, QPushButton, QHBoxLayout, QVBoxLayout, QGridLayout, QLineEdit
+from PyQt5.QtWidgets import QApplication, QWidget, QLabel, QPushButton, QHBoxLayout, QVBoxLayout, QGridLayout, \
+    QLineEdit, QMessageBox
 from PyQt5.QtCore import QTimer, QRect, Qt
 from PyQt5.QtGui import QImage, QPixmap, QPainter, QPen, QFont
 import numpy as np
@@ -58,7 +64,7 @@ class VideoArea(QLabel):
         print("video area : w {} h {}".format(self.width(), self.height()))
 
         self.status = False
-        self.rect = [[self.width()*0.4, self.height()*0.4], [self.width()*0.6, self.height()*0.6]]
+        self.rect = [[self.width() * 0.4, self.height() * 0.4], [self.width() * 0.6, self.height() * 0.6]]
         self.buf = copy.deepcopy(self.rect)
 
         self.setScaledContents(True)
@@ -99,12 +105,13 @@ class VideoBox(QWidget):
         self.setFixedSize(width, height)
         print("video box : w {} h {}".format(self.width(), self.height()))
         self.video_area = VideoArea(self.width() * 0.9, self.height() * 0.5)
+        self.configure = Configure(self.width() * 0.9, self.height() * 0.3)
 
         layout = QVBoxLayout()
         layout.addStretch()
         layout.addWidget(self.video_area)
         layout.addStretch()
-        layout.addWidget(Configure(self.width() * 0.9, self.height() * 0.3))
+        layout.addWidget(self.configure)
         layout.addStretch()
         self.setLayout(layout)
         self.show()
@@ -146,9 +153,9 @@ class ShowBox(QWidget):
         layout_l.addStretch()
         layout_r.addStretch()
         for i in range(0, 3):
-            layout_l.addWidget(self.labels[i*2])
+            layout_l.addWidget(self.labels[i * 2])
             layout_l.addStretch()
-            layout_r.addWidget(self.labels[i*2+1])
+            layout_r.addWidget(self.labels[i * 2 + 1])
             layout_r.addStretch()
         layout = QHBoxLayout()
         layout.addStretch()
@@ -161,8 +168,72 @@ class ShowBox(QWidget):
         self.show()
 
 
+def num_identify(img, rec):
+    x, y, w, h = rec
+
+    if h / w > 3:
+        return 1
+    else:
+        # 更新，改为穿针法
+        line1 = img[y:y + h, x + w // 2]
+        line2 = img[y + h // 4, x:x + w]
+        line3 = img[y + (h // 4) * 3, x:x + w]
+        # 检测竖线，从而识别a,g,d笔画
+        a, b, c, d, e, f, g = 0, 0, 0, 0, 0, 0, 0
+        for i in range(h):
+            if line1[i] == 255:
+                if i < (h // 3):
+                    a = 1
+                if i > 2 * (h // 3):
+                    d = 1
+                if (h // 3) < i < 2 * (h // 3):
+                    g = 1
+        # 检测横线line2、line3，从而识别b,f笔画并减少时间消耗
+        for i in range(w):
+            if line2[i] == 255:
+                if i < (w // 2):
+                    b = 1
+                if i > (w // 2):
+                    f = 1
+            if line3[i] == 255:
+                if i < (w // 2):
+                    c = 1
+                if i > (w // 2):
+                    e = 1
+
+        # 不写的眼花缭乱了，直接写就可以了
+        if a and b and c and d and e and f and g == 0:
+            return 0
+        if a and b == 0 and c and d and e == 0 and f and g:
+            return 2
+        if a and b == 0 and c == 0 and d and e and f and g:
+            return 3
+        if a == 0 and b and c == 0 and d == 0 and e and f and g:
+            return 4
+        if a and b and c == 0 and d and e and f == 0 and g:
+            return 5
+        if a and b and c and d and e and f == 0 and g:
+            return 6
+        if a and b == 0 and c == 0 and d == 0 and e and f and g == 0:
+            return 7
+        if a and b and c and d and e and f and g:
+            return 8
+        if a and b and c == 0 and d and e and f and g:
+            return 9
+
+        return -1
+
+
+# order of number
+def __lt__(self, y):
+    if self[0] < y[0]:
+        return True
+    else:
+        return False
+
+
 class MainWindow(QWidget):
-    def __init__(self):
+    def __init__(self, src):
         super().__init__()
         desktop = QApplication.desktop()
 
@@ -173,9 +244,14 @@ class MainWindow(QWidget):
         self.setStyleSheet('font:18px')
         print("main window : w {} h {}".format(self.width(), self.height()))
 
+        self.valid_interval = [-0x3f3f3f3f, 0x3f3f3f3f]
+        self.to_miao_code = []
+        self.exceed_cnt = 0
+        self.last_alarm_time = datetime.datetime.now() - datetime.timedelta(minutes=5)
+
         self.frame = None
 
-        self.cap = cv.VideoCapture(1, cv.CAP_DSHOW)
+        self.cap = cv.VideoCapture(src, cv.CAP_DSHOW)
         self.timer = QTimer()
 
         self.timer.start(100)
@@ -188,6 +264,8 @@ class MainWindow(QWidget):
         self.layout.addWidget(self.video_box)
         self.layout.addWidget(self.show_box)
         self.setLayout(self.layout)
+
+        self.video_box.configure.button.clicked.connect(self.on_click)
 
         self.show()
 
@@ -237,6 +315,30 @@ class MainWindow(QWidget):
         self.show_box.labels[5].video.setPixmap(QPixmap.fromImage(img))
         self.show_box.update()
 
+        bounds = sorted(boundRect)
+        num = 0
+        for i in bounds:
+            num = num * 10 + num_identify(dil, i)
+        self.video_box.configure.indicating_number.setText('当前读数为 ' + str(num))
+        if num < self.valid_interval[0] or num > self.valid_interval[1]:
+            if self.exceed_cnt > 10 and ((datetime.datetime.now() - self.last_alarm_time).seconds > 300):
+                self.last_alarm_time = datetime.datetime.now()
+                for dst in self.to_miao_code:
+                    cur_msg = '您好：\n'
+                    cur_msg += '当前示数{}已不在您的预设区间[{}, {}]\n'.format(num, self.valid_interval[0], self.valid_interval[1])
+                    cur_msg += '发送自\n{}\n{}\n{}'.format(socket.gethostbyname(socket.gethostname()), socket.gethostname(),
+                                                        datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
+                    page = request.urlopen('http://miaotixing.com/trigger?'
+                                           + parse.urlencode({'id': dst, 'text': cur_msg, 'type': 'json'}))
+                    jsonObj = json.loads(page.read())
+                    if jsonObj['code'] == 0:
+                        print('成功')
+                    else:
+                        print('失败，错误原因：{}，{}'.format(jsonObj['code'], jsonObj['msg']))
+            self.exceed_cnt += 1
+        else:
+            self.exceed_cnt = 0
+
     def get_valid_img(self):
         x = self.video_box.video_area.x()
         y = self.video_box.video_area.y()
@@ -251,6 +353,17 @@ class MainWindow(QWidget):
         img = copy.deepcopy(self.frame[real_y0:real_y1, real_x0:real_x1, :])
         return img
 
+    def on_click(self):
+        try:
+            self.valid_interval[0] = int(self.video_box.configure.itl_edit1.text())
+            self.valid_interval[1] = int(self.video_box.configure.itl_edit2.text())
+            self.to_miao_code = [i for i in self.video_box.configure.alter_edit.text().split(',')]
+        except Exception as e:
+            QMessageBox(QMessageBox.Warning, '错误', '输入参数有误！{}'.format(str(e))).exec_()
+        else:
+            QMessageBox(QMessageBox.Information, '通知', '已成功设置！\n有效区间[{}, {}]\n被通知人 {}'.format(
+                self.valid_interval[0], self.valid_interval[1], self.to_miao_code)).exec_()
+
     def __del__(self):
         try:
             self.cap.release()
@@ -262,6 +375,8 @@ class MainWindow(QWidget):
             print("timer has been stopped")
 
 
-main_app = QApplication(sys.argv)
-window = MainWindow()
-sys.exit(main_app.exec_())
+if __name__ == '__main__':
+
+    main_app = QApplication(sys.argv)
+    window = MainWindow(1)
+    sys.exit(main_app.exec_())
