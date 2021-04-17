@@ -238,7 +238,7 @@ class MainWindow(QWidget):
         desktop = QApplication.desktop()
 
         self.setFixedSize(desktop.width() * 0.9, desktop.height() * 0.45)
-        self.move(desktop.width() * 0.05, desktop.height() * 0.01)
+        self.move(desktop.width() * 0.05, desktop.height() * 0.05)
         self.setWindowTitle('读数监控')
         self.setFont(QFont('Microsoft YaHei'))
         self.setStyleSheet('font:18px')
@@ -378,5 +378,5 @@ class MainWindow(QWidget):
 if __name__ == '__main__':
 
     main_app = QApplication(sys.argv)
-    window = MainWindow(1)
+    window = MainWindow(0)
     sys.exit(main_app.exec_())
