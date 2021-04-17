@@ -3,7 +3,7 @@ import cv2 as cv
 import copy
 from PyQt5.QtWidgets import QApplication, QWidget, QLabel, QPushButton, QHBoxLayout, QVBoxLayout, QGridLayout, QLineEdit
 from PyQt5.QtCore import QTimer, QRect, Qt
-from PyQt5.QtGui import QImage, QPixmap, QPainter, QPen
+from PyQt5.QtGui import QImage, QPixmap, QPainter, QPen, QFont
 import numpy as np
 
 
@@ -14,6 +14,7 @@ class Configure(QWidget):
         print("configure : w {} h {}".format(self.width(), self.height()))
 
         self.indicating_number = QLabel('当前读数为 null')
+        self.indicating_number.setStyleSheet('font:40px')
         self.itl_1 = QLabel('当读数小于')
         self.itl_edit1 = QLineEdit()
         self.itl_2 = QLabel('，或大于')
@@ -25,17 +26,27 @@ class Configure(QWidget):
         self.button = QPushButton()
         self.button.setText('确认')
 
-        layout = QGridLayout()
-        layout.addWidget(self.indicating_number, 0, 0, 1, 5)
-        layout.addWidget(self.itl_1, 1, 0)
-        layout.addWidget(self.itl_edit1, 1, 1)
-        layout.addWidget(self.itl_2, 1, 2)
-        layout.addWidget(self.itl_edit2, 1, 3)
-        layout.addWidget(self.itl_3, 1, 4)
-        layout.addWidget(self.alter_1, 2, 0)
-        layout.addWidget(self.alter_2, 2, 1)
-        layout.addWidget(self.alter_edit, 2, 2, 1, 3)
-        layout.addWidget(self.button, 3, 0, 1, 5)
+        line1_layout = QHBoxLayout()
+        line1_layout.addWidget(self.itl_1)
+        line1_layout.addWidget(self.itl_edit1)
+        line1_layout.addWidget(self.itl_2)
+        line1_layout.addWidget(self.itl_edit2)
+        line1_layout.addWidget(self.itl_3)
+        line1_layout.addStretch()
+        line2_layout = QHBoxLayout()
+        line2_layout.addWidget(self.alter_1)
+        line2_layout.addWidget(self.alter_2)
+        line2_layout.addWidget(self.alter_edit)
+        line3_layout = QHBoxLayout()
+        line3_layout.addStretch()
+        line3_layout.addWidget(self.button)
+        line3_layout.addStretch()
+        layout = QVBoxLayout()
+        layout.addWidget(self.indicating_number)
+        layout.addStretch()
+        layout.addLayout(line1_layout)
+        layout.addLayout(line2_layout)
+        layout.addLayout(line3_layout)
         self.setLayout(layout)
         self.show()
 
@@ -87,13 +98,34 @@ class VideoBox(QWidget):
         super().__init__()
         self.setFixedSize(width, height)
         print("video box : w {} h {}".format(self.width(), self.height()))
-        self.video_area = VideoArea(self.width(), self.height() * 0.5)
+        self.video_area = VideoArea(self.width() * 0.9, self.height() * 0.5)
 
-        self.layout = QVBoxLayout()
-        self.layout.addWidget(self.video_area)
-        self.layout.addWidget(Configure(self.width(), self.height() * 0.15))
-        self.setLayout(self.layout)
+        layout = QVBoxLayout()
+        layout.addStretch()
+        layout.addWidget(self.video_area)
+        layout.addStretch()
+        layout.addWidget(Configure(self.width() * 0.9, self.height() * 0.3))
+        layout.addStretch()
+        self.setLayout(layout)
         self.show()
+
+
+class SingleGroup(QWidget):
+    def __init__(self, width, height):
+        super().__init__()
+        self.setFixedSize(width, height)
+
+        self.title = QLabel()
+        self.title.setFixedSize(width, height * 0.2)
+        self.video = QLabel()
+        self.video.setFixedSize(width, height * 0.7)
+        self.video.setScaledContents(True)
+
+        layout = QVBoxLayout()
+        layout.addWidget(self.title)
+        layout.addWidget(self.video)
+        layout.addStretch()
+        self.setLayout(layout)
 
 
 class ShowBox(QWidget):
@@ -105,17 +137,25 @@ class ShowBox(QWidget):
         title = ['原图', 'R通道', '滤波', '二值化', '膨胀', '定位']
         self.labels = []
         for i in range(0, len(title)):
-            self.labels.append(QLabel(title[i]))
-            self.labels[-1].setFixedSize(self.width() * 0.45, self.height() * 0.03)
-            self.labels.append(QLabel())
-            self.labels[-1].setFixedSize(self.width() * 0.45, self.height() * 0.20)
-            self.labels[-1].setScaledContents(True)
-        print("len grid: {}".format(len(self.labels)))
-        layout = QGridLayout()
-        for i in range(0, len(self.labels), 2):
-            layout.addWidget(self.labels[i], int(i / 4) * 2, int((i % 4) / 2))
-        for i in range(1, len(self.labels), 2):
-            layout.addWidget(self.labels[i], int(i / 4) * 2 + 1, int(((i - 1) % 4) / 2))
+            self.labels.append(SingleGroup(self.width() * 0.45, self.height() * 0.3))
+            self.labels[-1].title.setText(title[i])
+            self.labels[-1].title.setAlignment(Qt.AlignCenter)
+
+        layout_l = QVBoxLayout()
+        layout_r = QVBoxLayout()
+        layout_l.addStretch()
+        layout_r.addStretch()
+        for i in range(0, 3):
+            layout_l.addWidget(self.labels[i*2])
+            layout_l.addStretch()
+            layout_r.addWidget(self.labels[i*2+1])
+            layout_r.addStretch()
+        layout = QHBoxLayout()
+        layout.addStretch()
+        layout.addLayout(layout_l)
+        layout.addStretch()
+        layout.addLayout(layout_r)
+        layout.addStretch()
         self.setLayout(layout)
 
         self.show()
@@ -127,8 +167,10 @@ class MainWindow(QWidget):
         desktop = QApplication.desktop()
 
         self.setFixedSize(desktop.width() * 0.9, desktop.height() * 0.45)
-        self.move(desktop.width() * 0.1, desktop.height() * 0.05)
-        self.setWindowTitle('Simple')
+        self.move(desktop.width() * 0.05, desktop.height() * 0.01)
+        self.setWindowTitle('读数监控')
+        self.setFont(QFont('Microsoft YaHei'))
+        self.setStyleSheet('font:18px')
         print("main window : w {} h {}".format(self.width(), self.height()))
 
         self.frame = None
@@ -161,25 +203,25 @@ class MainWindow(QWidget):
 
         frame = self.get_valid_img()
         img = QImage(frame.data.tobytes(), frame.shape[1], frame.shape[0], frame.shape[1] * 3, QImage.Format_RGB888)
-        self.show_box.labels[1].setPixmap(QPixmap.fromImage(img))
+        self.show_box.labels[0].video.setPixmap(QPixmap.fromImage(img))
         # red
         rch = frame[:, :, 0]
         img = QImage(rch.data.tobytes(), rch.shape[1], rch.shape[0], rch.shape[1], QImage.Format_Grayscale8)
         cv.imwrite('test.jpg', rch)
-        self.show_box.labels[3].setPixmap(QPixmap.fromImage(img))
+        self.show_box.labels[1].video.setPixmap(QPixmap.fromImage(img))
         # blur
         blr = cv.medianBlur(rch, 3)
         img = QImage(blr.data.tobytes(), blr.shape[1], blr.shape[0], blr.shape[1], QImage.Format_Grayscale8)
-        self.show_box.labels[5].setPixmap(QPixmap.fromImage(img))
+        self.show_box.labels[2].video.setPixmap(QPixmap.fromImage(img))
         # binary
         _, bny = cv.threshold(rch, 230, 255, cv.THRESH_BINARY)
         img = QImage(bny.data.tobytes(), bny.shape[1], bny.shape[0], bny.shape[1], QImage.Format_Grayscale8)
-        self.show_box.labels[7].setPixmap(QPixmap.fromImage(img))
+        self.show_box.labels[3].video.setPixmap(QPixmap.fromImage(img))
         # dilate
         kernel = np.ones((3, 3), np.int8)
         dil = cv.dilate(bny, kernel, iterations=5)
         img = QImage(dil.data.tobytes(), dil.shape[1], dil.shape[0], dil.shape[1], QImage.Format_Grayscale8)
-        self.show_box.labels[9].setPixmap(QPixmap.fromImage(img))
+        self.show_box.labels[4].video.setPixmap(QPixmap.fromImage(img))
         # detect number area
         contours, hierarchy = cv.findContours(dil, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE)
         boundRect = []
@@ -192,7 +234,7 @@ class MainWindow(QWidget):
                 # 画一个方形标注一下，看看圈的范围是否正确
                 rec = cv.rectangle(rec, (x, y), (x + w, y + h), 255, 2)
         img = QImage(rec.data.tobytes(), rec.shape[1], rec.shape[0], rec.shape[1], QImage.Format_Grayscale8)
-        self.show_box.labels[11].setPixmap(QPixmap.fromImage(img))
+        self.show_box.labels[5].video.setPixmap(QPixmap.fromImage(img))
         self.show_box.update()
 
     def get_valid_img(self):
