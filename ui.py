@@ -123,13 +123,23 @@ class SingleGroup(QWidget):
         self.setFixedSize(width, height)
 
         self.title = QLabel()
-        self.title.setFixedSize(width, height * 0.2)
+        self.title.setFixedSize(width * 0.8, height * 0.2)
         self.video = QLabel()
         self.video.setFixedSize(width, height * 0.7)
         self.video.setScaledContents(True)
+        self.up = QPushButton()
+        self.up.setText('Up')
+        self.down = QPushButton()
+        self.down.setText('Down')
 
+        button_layout = QVBoxLayout()
+        button_layout.addWidget(self.up)
+        button_layout.addWidget(self.down)
+        title_layout = QHBoxLayout()
+        title_layout.addWidget(self.title)
+        title_layout.addLayout(button_layout)
         layout = QVBoxLayout()
-        layout.addWidget(self.title)
+        layout.addLayout(title_layout)
         layout.addWidget(self.video)
         layout.addStretch()
         self.setLayout(layout)
@@ -141,87 +151,153 @@ class ShowBox(QWidget):
         self.setFixedSize(width, height)
         print("show box : w {} h {}".format(self.width(), self.height()))
 
-        title = ['原图', 'R通道', '滤波', '二值化', '膨胀', '定位']
-        self.labels = []
-        for i in range(0, len(title)):
-            self.labels.append(SingleGroup(self.width() * 0.45, self.height() * 0.3))
-            self.labels[-1].title.setText(title[i])
-            self.labels[-1].title.setAlignment(Qt.AlignCenter)
-
-        layout_l = QVBoxLayout()
-        layout_r = QVBoxLayout()
-        layout_l.addStretch()
-        layout_r.addStretch()
-        for i in range(0, 3):
-            layout_l.addWidget(self.labels[i * 2])
-            layout_l.addStretch()
-            layout_r.addWidget(self.labels[i * 2 + 1])
-            layout_r.addStretch()
-        layout = QHBoxLayout()
+        self.origin = SingleGroup(self.width(), self.height() * 0.3)
+        self.origin.title.setText('原图')
+        self.origin.up.setVisible(False)
+        self.origin.down.setVisible(False)
+        self.binary = SingleGroup(self.width(), self.height() * 0.3)
+        self.binary.title.setText('二值化图像，请调整阈值以正常显示数字')
+        self.dilate = SingleGroup(self.width(), self.height() * 0.3)
+        self.dilate.title.setText('膨胀后图像，请调整膨胀程度以使每个数字连成一个整体')
+        # title = ['原图', 'R通道', '滤波', '二值化', '膨胀', '定位']
+        # self.labels = []
+        # for i in range(0, len(title)):
+        #     self.labels.append(SingleGroup(self.width() * 0.45, self.height() * 0.3))
+        #     self.labels[-1].title.setText(title[i])
+        #     self.labels[-1].title.setAlignment(Qt.AlignCenter)
+        #
+        # layout_l = QVBoxLayout()
+        # layout_r = QVBoxLayout()
+        # layout_l.addStretch()
+        # layout_r.addStretch()
+        # for i in range(0, 3):
+        #     layout_l.addWidget(self.labels[i * 2])
+        #     layout_l.addStretch()
+        #     layout_r.addWidget(self.labels[i * 2 + 1])
+        #     layout_r.addStretch()
+        layout = QVBoxLayout()
         layout.addStretch()
-        layout.addLayout(layout_l)
+        layout.addWidget(self.origin)
         layout.addStretch()
-        layout.addLayout(layout_r)
+        layout.addWidget(self.binary)
+        layout.addStretch()
+        layout.addWidget(self.dilate)
         layout.addStretch()
         self.setLayout(layout)
 
         self.show()
 
 
-def num_identify(img, rec):
-    x, y, w, h = rec
+number = {
+    "0": [
+        [0, 255, 255, 255, 0],
+        [255, 0, 0, 0, 255],
+        [255, 0, 0, 255, 255],
+        [255, 0, 255, 0, 255],
+        [255, 255, 0, 0, 255],
+        [255, 0, 0, 0, 255],
+        [0, 255, 255, 255, 0]
+    ],
+    "1": [
+        [0, 0, 255, 0, 0],
+        [255, 255, 255, 0, 0],
+        [0, 0, 255, 0, 0],
+        [0, 0, 255, 0, 0],
+        [0, 0, 255, 0, 0],
+        [0, 0, 255, 0, 0],
+        [255, 255, 255, 255, 255]
+    ],
+    "2": [
+        [0, 255, 255, 255, 0],
+        [255, 0, 0, 0, 255],
+        [0, 0, 0, 0, 255],
+        [0, 0, 0, 255, 0],
+        [0, 0, 255, 0, 0],
+        [0, 255, 0, 0, 0],
+        [255, 255, 255, 255, 255]
+    ],
+    "3": [
+        [255, 255, 255, 255, 255],
+        [0, 0, 0, 255, 0],
+        [0, 0, 255, 0, 0],
+        [0, 0, 0, 255, 0],
+        [0, 0, 0, 0, 255],
+        [255, 0, 0, 0, 255],
+        [0, 255, 255, 255, 0]
+    ],
+    "4": [
+        [0, 0, 0, 255, 0],
+        [0, 0, 255, 255, 0],
+        [0, 255, 0, 255, 0],
+        [255, 0, 0, 255, 0],
+        [255, 255, 255, 255, 255],
+        [0, 0, 0, 255, 0],
+        [0, 0, 0, 255, 0]
+    ],
+    "5": [
+        [255, 255, 255, 255, 255],
+        [255, 0, 0, 0, 0],
+        [255, 255, 255, 255, 0],
+        [0, 0, 0, 0, 255],
+        [0, 0, 0, 0, 255],
+        [255, 0, 0, 0, 255],
+        [0, 255, 255, 255, 0]
+    ],
+    "6": [
+        [0, 0, 255, 255, 0],
+        [0, 255, 0, 0, 0],
+        [255, 0, 0, 0, 0],
+        [255, 255, 255, 255, 0],
+        [255, 0, 0, 0, 255],
+        [255, 0, 0, 0, 255],
+        [0, 255, 255, 255, 0]
+    ],
+    "7": [
+        [255, 255, 255, 255, 255],
+        [0, 0, 0, 0, 255],
+        [0, 0, 0, 255, 0],
+        [0, 0, 255, 0, 0],
+        [0, 255, 0, 0, 0],
+        [0, 255, 0, 0, 0],
+        [0, 255, 0, 0, 0]
+    ],
+    "8": [
+        [0, 255, 255, 255, 0],
+        [255, 0, 0, 0, 255],
+        [255, 0, 0, 0, 255],
+        [0, 255, 255, 255, 0],
+        [255, 0, 0, 0, 255],
+        [255, 0, 0, 0, 255],
+        [0, 255, 255, 255, 0]
+    ],
+    "9": [
+        [0, 255, 255, 255, 0],
+        [255, 0, 0, 0, 255],
+        [255, 0, 0, 0, 255],
+        [0, 255, 255, 255, 255],
+        [0, 0, 0, 0, 255],
+        [0, 0, 0, 255, 0],
+        [0, 255, 255, 0, 0]
+    ]
+}
 
-    if h / w > 3:
-        return 1
-    else:
-        # 更新，改为穿针法
-        line1 = img[y:y + h, x + w // 2]
-        line2 = img[y + h // 4, x:x + w]
-        line3 = img[y + (h // 4) * 3, x:x + w]
-        # 检测竖线，从而识别a,g,d笔画
-        a, b, c, d, e, f, g = 0, 0, 0, 0, 0, 0, 0
-        for i in range(h):
-            if line1[i] == 255:
-                if i < (h // 3):
-                    a = 1
-                if i > 2 * (h // 3):
-                    d = 1
-                if (h // 3) < i < 2 * (h // 3):
-                    g = 1
-        # 检测横线line2、line3，从而识别b,f笔画并减少时间消耗
-        for i in range(w):
-            if line2[i] == 255:
-                if i < (w // 2):
-                    b = 1
-                if i > (w // 2):
-                    f = 1
-            if line3[i] == 255:
-                if i < (w // 2):
-                    c = 1
-                if i > (w // 2):
-                    e = 1
 
-        # 不写的眼花缭乱了，直接写就可以了
-        if a and b and c and d and e and f and g == 0:
-            return 0
-        if a and b == 0 and c and d and e == 0 and f and g:
-            return 2
-        if a and b == 0 and c == 0 and d and e and f and g:
-            return 3
-        if a == 0 and b and c == 0 and d == 0 and e and f and g:
-            return 4
-        if a and b and c == 0 and d and e and f == 0 and g:
-            return 5
-        if a and b and c and d and e and f == 0 and g:
-            return 6
-        if a and b == 0 and c == 0 and d == 0 and e and f and g == 0:
-            return 7
-        if a and b and c and d and e and f and g:
-            return 8
-        if a and b and c == 0 and d and e and f and g:
-            return 9
+def sub(a, b):
+    s = 0
+    for i in range(len(a)):
+        for j in range(len(a[0])):
+            if a[i][j] > b[i][j]:
+                s += a[i][j] - b[i][j]
+            else:
+                s += b[i][j] - a[i][j]
+    return s
 
-        return -1
+
+def match(img):
+    score = {}
+    for key, val in number.items():
+        score[key] = sub(val, img)
+    return min(score, key=lambda x: score[x])
 
 
 # order of number
@@ -250,6 +326,8 @@ class MainWindow(QWidget):
         self.last_alarm_time = datetime.datetime.now() - datetime.timedelta(minutes=5)
 
         self.frame = None
+        self.binary_threshold = 120
+        self.dilate_iteration = 3
 
         self.cap = cv.VideoCapture(src, cv.CAP_DSHOW)
         self.timer = QTimer()
@@ -259,13 +337,17 @@ class MainWindow(QWidget):
 
         self.video_box = VideoBox(self.width() * 0.45, self.height())
         self.show_box = ShowBox(self.width() * 0.45, self.height())
+        self.show_box.binary.up.clicked.connect(self.on_binary_up_click)
+        self.show_box.binary.down.clicked.connect(self.on_binary_down_click)
+        self.show_box.dilate.up.clicked.connect(self.on_dilate_up_click)
+        self.show_box.dilate.down.clicked.connect(self.on_dilate_down_click)
 
         self.layout = QHBoxLayout()
         self.layout.addWidget(self.video_box)
         self.layout.addWidget(self.show_box)
         self.setLayout(self.layout)
 
-        self.video_box.configure.button.clicked.connect(self.on_click)
+        self.video_box.configure.button.clicked.connect(self.on_configure_button_click)
 
         self.show()
 
@@ -281,44 +363,35 @@ class MainWindow(QWidget):
 
         frame = self.get_valid_img()
         img = QImage(frame.data.tobytes(), frame.shape[1], frame.shape[0], frame.shape[1] * 3, QImage.Format_RGB888)
-        self.show_box.labels[0].video.setPixmap(QPixmap.fromImage(img))
-        # red
-        rch = frame[:, :, 0]
-        img = QImage(rch.data.tobytes(), rch.shape[1], rch.shape[0], rch.shape[1], QImage.Format_Grayscale8)
-        cv.imwrite('test.jpg', rch)
-        self.show_box.labels[1].video.setPixmap(QPixmap.fromImage(img))
-        # blur
-        blr = cv.medianBlur(rch, 3)
-        img = QImage(blr.data.tobytes(), blr.shape[1], blr.shape[0], blr.shape[1], QImage.Format_Grayscale8)
-        self.show_box.labels[2].video.setPixmap(QPixmap.fromImage(img))
-        # binary
-        _, bny = cv.threshold(rch, 230, 255, cv.THRESH_BINARY)
-        img = QImage(bny.data.tobytes(), bny.shape[1], bny.shape[0], bny.shape[1], QImage.Format_Grayscale8)
-        self.show_box.labels[3].video.setPixmap(QPixmap.fromImage(img))
-        # dilate
+        self.show_box.origin.video.setPixmap(QPixmap.fromImage(img))
+        grey = cv.cvtColor(frame, cv.COLOR_BGR2GRAY)
+        _, binary = cv.threshold(grey, self.binary_threshold, 255, cv.THRESH_BINARY)
+        img = QImage(binary.data.tobytes(), binary.shape[1], binary.shape[0], binary.shape[1], QImage.Format_Grayscale8)
+        self.show_box.binary.video.setPixmap(QPixmap.fromImage(img))
         kernel = np.ones((3, 3), np.int8)
-        dil = cv.dilate(bny, kernel, iterations=5)
-        img = QImage(dil.data.tobytes(), dil.shape[1], dil.shape[0], dil.shape[1], QImage.Format_Grayscale8)
-        self.show_box.labels[4].video.setPixmap(QPixmap.fromImage(img))
-        # detect number area
-        contours, hierarchy = cv.findContours(dil, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE)
-        boundRect = []
-        rec = copy.deepcopy(dil)
-        for c in contours:
-            x, y, w, h = cv.boundingRect(c)
-            # 一个筛选，可能需要看识别条件而定，有待优化
-            if h / w > 1:
-                boundRect.append([x, y, w, h])
-                # 画一个方形标注一下，看看圈的范围是否正确
-                rec = cv.rectangle(rec, (x, y), (x + w, y + h), 255, 2)
-        img = QImage(rec.data.tobytes(), rec.shape[1], rec.shape[0], rec.shape[1], QImage.Format_Grayscale8)
-        self.show_box.labels[5].video.setPixmap(QPixmap.fromImage(img))
+        dilate = cv.dilate(binary, kernel, iterations=self.dilate_iteration)
+        img = QImage(dilate.data.tobytes(), dilate.shape[1], dilate.shape[0], dilate.shape[1], QImage.Format_Grayscale8)
+        self.show_box.dilate.video.setPixmap(QPixmap.fromImage(img))
+
         self.show_box.update()
 
-        bounds = sorted(boundRect)
-        num = 0
-        for i in bounds:
-            num = num * 10 + num_identify(dil, i)
+        contours, _ = cv.findContours(dilate, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE)
+        bounding = []
+        for c in contours:
+            x, y, w, h = cv.boundingRect(c)
+            if w * h * 10 > len(dilate) * len(dilate[0]) and h / w > 1:
+                bounding.append([x, y, w, h])
+        bounding = sorted(bounding)
+        num = ""
+        for b in bounding:
+            rec = cv.resize(dilate[b[1]:b[1] + b[3], b[0]:b[0] + b[2]], (5, 7))
+            # print(len(rec), len(rec[0]))
+            num += match(rec)
+        print(num)
+        try:
+            num = int(num)/100
+        except:
+            num = -0x3f3f3f3f
         self.video_box.configure.indicating_number.setText('当前读数为 ' + str(num))
         if num < self.valid_interval[0] or num > self.valid_interval[1]:
             if self.exceed_cnt > 10 and ((datetime.datetime.now() - self.last_alarm_time).seconds > 300):
@@ -326,7 +399,8 @@ class MainWindow(QWidget):
                 for dst in self.to_miao_code:
                     cur_msg = '您好：\n'
                     cur_msg += '当前示数{}已不在您的预设区间[{}, {}]\n'.format(num, self.valid_interval[0], self.valid_interval[1])
-                    cur_msg += '发送自\n{}\n{}\n{}'.format(socket.gethostbyname(socket.gethostname()), socket.gethostname(),
+                    cur_msg += '发送自\n{}\n{}\n{}'.format(socket.gethostbyname(socket.gethostname()),
+                                                        socket.gethostname(),
                                                         datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
                     page = request.urlopen('http://miaotixing.com/trigger?'
                                            + parse.urlencode({'id': dst, 'text': cur_msg, 'type': 'json'}))
@@ -353,7 +427,7 @@ class MainWindow(QWidget):
         img = copy.deepcopy(self.frame[real_y0:real_y1, real_x0:real_x1, :])
         return img
 
-    def on_click(self):
+    def on_configure_button_click(self):
         try:
             self.valid_interval[0] = int(self.video_box.configure.itl_edit1.text())
             self.valid_interval[1] = int(self.video_box.configure.itl_edit2.text())
@@ -363,6 +437,22 @@ class MainWindow(QWidget):
         else:
             QMessageBox(QMessageBox.Information, '通知', '已成功设置！\n有效区间[{}, {}]\n被通知人 {}'.format(
                 self.valid_interval[0], self.valid_interval[1], self.to_miao_code)).exec_()
+
+    def on_binary_up_click(self):
+        if self.binary_threshold <= 245:
+            self.binary_threshold += 10
+
+    def on_binary_down_click(self):
+        if self.binary_threshold >= 10:
+            self.binary_threshold -= 10
+
+    def on_dilate_up_click(self):
+        if self.dilate_iteration <= 10:
+            self.dilate_iteration += 1
+
+    def on_dilate_down_click(self):
+        if self.dilate_iteration >= 1:
+            self.dilate_iteration -= 1
 
     def __del__(self):
         try:
@@ -376,7 +466,6 @@ class MainWindow(QWidget):
 
 
 if __name__ == '__main__':
-
     main_app = QApplication(sys.argv)
-    window = MainWindow(0)
+    window = MainWindow(1)
     sys.exit(main_app.exec_())

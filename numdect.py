@@ -91,15 +91,6 @@ number = {
         [0, 0, 0, 0, 255],
         [0, 0, 0, 255, 0],
         [0, 255, 255, 0, 0]
-    ],
-    ".": [
-        [255, 255, 255, 255, 255],
-        [255, 255, 255, 255, 255],
-        [255, 255, 255, 255, 255],
-        [255, 255, 255, 255, 255],
-        [255, 255, 255, 255, 255],
-        [255, 255, 255, 255, 255],
-        [255, 255, 255, 255, 255]
     ]
 }
 
@@ -134,18 +125,18 @@ def num_identify(img):
     # cv.imshow('test', img)
     grey = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
     # cv.imshow('test', grey)
-    #_, binary = cv.threshold(grey, 1.4 * sum(map(sum, grey)) / (len(grey) * len(grey[0])), 255, cv.THRESH_BINARY)
-    _, binary = cv.threshold(grey, 160, 255, cv.THRESH_BINARY)
+    # _, binary = cv.threshold(grey, 1.4 * sum(map(sum, grey)) / (len(grey) * len(grey[0])), 255, cv.THRESH_BINARY)
+    _, binary = cv.threshold(grey, 230, 255, cv.THRESH_BINARY)
     # cv.imshow('test', binary)
     kernel = np.ones((3, 3), np.int8)
-    dilate = cv.dilate(binary, kernel, iterations=7)
+    dilate = cv.dilate(binary, kernel, iterations=3)
     cv.imshow('test', dilate)
     cv.waitKey(0)
     contours, _ = cv.findContours(dilate, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE)
     bounding = []
     for c in contours:
         x, y, w, h = cv.boundingRect(c)
-        if w * h * 100 > len(dilate) * len(dilate[0]):
+        if w * h * 10 > len(dilate) * len(dilate[0]) and h / w > 1:
             bounding.append([x, y, w, h])
     bounding = sorted(bounding)
     num = ""
@@ -153,13 +144,19 @@ def num_identify(img):
         rec = cv.resize(dilate[b[1]:b[1] + b[3], b[0]:b[0] + b[2]], (5, 7))
         # print(len(rec), len(rec[0]))
         num += match(rec)
-    print(float(num))
+    print(num)
+    try:
+        num = float(num)
+        return num
+    except:
+        print("number error")
+        return -0x3f3f3f3f
 
 
 if __name__ == '__main__':
     cv.namedWindow('test', cv.WINDOW_AUTOSIZE)
-    imgs = ['292.99','293.06','300.00','303.08','311.15','314.83','345.00']
+    imgs = ['292.99', '293.06', '300.00', '303.08', '311.15', '314.83', '345.00']
     for i in imgs:
-        img = cv.imread('data/sample/'+i+'.jpg')
+        img = cv.imread('data/sample/' + i + '.jpg')
         num_identify(img)
     cv.waitKey(0)
