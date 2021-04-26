@@ -152,7 +152,7 @@ class ShowBox(QWidget):
         print("show box : w {} h {}".format(self.width(), self.height()))
 
         self.origin = SingleGroup(self.width(), self.height() * 0.3)
-        self.origin.title.setText('原图')
+        self.origin.title.setText('数字区域')
         self.origin.up.setVisible(False)
         self.origin.down.setVisible(False)
         self.binary = SingleGroup(self.width(), self.height() * 0.3)
@@ -311,9 +311,9 @@ def __lt__(self, y):
 class MainWindow(QWidget):
     def __init__(self, src):
         super().__init__()
-        desktop = QApplication.desktop()
+        desktop = QApplication.primaryScreen().geometry()
 
-        self.setFixedSize(desktop.width() * 0.9, desktop.height() * 0.45)
+        self.setFixedSize(desktop.width() * 0.9, desktop.height() * 0.8)
         self.move(desktop.width() * 0.05, desktop.height() * 0.05)
         self.setWindowTitle('读数监控')
         self.setFont(QFont('Microsoft YaHei'))
